@@ -1,6 +1,6 @@
 /*
  *  MobiOne PhoneUI Framework
- *  version 2.3.94.201310171231
+ *  version 2.5.0.201311011215
  *  <http://genuitec.com/mobile/resources/phoneui>
  *  (c) Copyright 2010-2012 Genuitec, LLC
  *
@@ -1281,6 +1281,7 @@ $(document).ready(function() {
 
 			var afterTransition = function() {
 				$new.css('pointer-events', 'auto');
+				// clickbuster.preventGhostClickAfterTransition();
 				fnAfterTransition(transition);
 				reinitscrollers($(currentScreen.anchor_id), revertTransition);
 			}
@@ -1549,6 +1550,13 @@ $(document).ready(function() {
 	phoneui.showURL = function(url, openIn, options) {
 		openIn = openIn || "_self";
 		
+		options = options || {
+			showLocationBar: true,
+			showNavigationBar: true,
+			showAddress: true,
+			patchWindowClose: false
+		};
+		
 		// Android web view doesn't support PDF files, so adding a hack here
 		if (phoneui.cordovaAvailable() && 
 			device.platform === "Android" && 
@@ -1761,7 +1769,7 @@ $(document).ready(function() {
 		// intercept creation of an audio element, patch it with our functions
 		document.__oldCreateElement = document.createElement;
 		document.createElement = function(el) {
-			if (el == 'audio') {
+			if (el.toLowerCase() == 'audio') {
 				return createAudioElement();
 			} else {
 				return document.__oldCreateElement(el);
@@ -1789,6 +1797,44 @@ $(document).ready(function() {
 		return fn.apply(this);
 	};
 	var preprocessTextAreas = FN_EMPTY; 
+	
+	var coordinates = [];
+	var lastTransition = 0;
+	var maxMoveX = screen.availWidth/10;
+	var maxMoveY = screen.availHeight/10;
+	var clickbuster = {
+		preventGhostClick: function(x, y) {
+			coordinates.push(x, y);
+			window.setTimeout(clickbuster.pop, 500);
+		},
+
+		/*
+		preventGhostClickAfterTransition: function() {
+			// lastTransition = timeMs();
+		},
+		*/
+
+		pop: function() {
+			coordinates.splice(0, 2);
+		},
+		
+		needToIgnore: function(eventX, eventY) {
+			if (timeMs() - lastTransition < 500) {
+				return true;
+			}
+			
+			var ignore = false;
+			for (var i = 0; i < coordinates.length; i += 2) {
+				var x = coordinates[i];
+				var y = coordinates[i + 1];
+				if (Math.abs(eventX - x) < maxMoveX && Math.abs(eventY - y) < maxMoveY) {
+					ignore = true;
+				}
+			}
+
+			return ignore;
+		}
+	};
 
 	// Check whether placeholders are supported for textarea
     if (!('placeholder' in $('<textarea>')[0])) {
@@ -1959,6 +2005,7 @@ $(document).ready(function() {
 					vScroll : true,
 					hScrollbar : false,
 					vScrollbar : true,
+					// handleClick: false,
 					bounce: $(el).attr('data-bounce') == 'true',
 					// desktopCompatibility : true,
 					onBeforeScrollStart : function(e) {
@@ -2013,39 +2060,13 @@ $(document).ready(function() {
 			$that.removeClass(m1Design.css("unclicked")).addClass(m1Design.css("clicked"));
 		}
 
-		var clickbuster = {
-			coordinates: [],
-
-			preventGhostClick: function(x, y) {
-				clickbuster.coordinates.push(x, y);
-				window.setTimeout(clickbuster.pop, 500);
-			},
-
-			pop: function() {
-				clickbuster.coordinates.splice(0, 2);
-			},
-			
-			needToIgnore: function(eventX, eventY) {
-				var ignore = false;
-				for (var i = 0; i < clickbuster.coordinates.length; i += 2) {
-					var x = clickbuster.coordinates[i];
-					var y = clickbuster.coordinates[i + 1];
-					if (Math.abs(eventX - x) < 25 && Math.abs(eventY - y) < 25) {
-						ignore = true;
-					}
-				}
-
-				return ignore;
-			}
-		};
-
 		/**
 		 * @return true if event is not processed and should be bubbled, false otherwise
 		 */
 		var doClick = function($that, sx, sy) {
 			var ret = true;
-			
-			if (!clickbuster.needToIgnore(event.clientX, event.clientY)) {
+
+			if (!clickbuster.needToIgnore(sx, sy)) {
 				// Instead of firing doclick event just call doclick handler manually
 				var actionId = $that.attr('data-action-click-id');
 				if (!!actionId) {
@@ -2926,8 +2947,8 @@ phoneui._extraPageInitializers = [];
  */
 phoneui.version = {
 	major : 2,
-	minor : 3,
-	maintenance : 94,
+	minor : 5,
+	maintenance : 0,
 	toString : function() {
 		return this.major + "." + this.minor + "." + this.maintenance;
 	}
